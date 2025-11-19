@@ -1,0 +1,14 @@
+{
+  "ProjectName": "moodle",
+  "Environment": "dev",
+  "Student": "ZweLwin",
+  "Course": "Practical-IaC-Deployment",
+  "Implementation": "AWS",
+  "Task": "Task01-Networking",
+  "DeploymentType": "PoC",
+  "VpcCidr": "10.25.92.0/22",
+  "PublicSubnet1Cidr": "10.25.92.0/24",
+  "PublicSubnet2Cidr": "10.25.93.0/24",
+  "PrivateSubnet1Cidr": "10.25.94.0/24",
+  "PrivateSubnet2Cidr": "10.25.95.0/24"
+}
