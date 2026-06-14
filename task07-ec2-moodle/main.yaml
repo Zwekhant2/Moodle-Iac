@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: Task 7 – EC2 Instance with Moodle 4.x installed via UserData (LAMP on Ubuntu 22.04)
+Description: Task 7 – EC2 Instance with Moodle 4.x (LAMP on Ubuntu 22.04, public subnet)
 
 Parameters:
   ProjectName: { Type: String, Default: moodle }
@@ -9,23 +9,27 @@ Parameters:
   Task: { Type: String, Default: Task07-EC2-Moodle }
   KeyPairName:
     Type: AWS::EC2::KeyPair::KeyName
-    Description: EC2 key pair for SSH (via bastion)
+    Description: EC2 key pair for SSH access
   InstanceType:
     Type: String
-    Default: t3.medium
+    Default: t3.micro
+  DBEndpoint:
+    Type: String
+    Description: RDS endpoint from task06 stack output
+  DBName:
+    Type: String
+    Default: moodle
+  DBUsername:
+    Type: String
+    Default: moodleadmin
   DBPassword:
     Type: String
     NoEcho: true
-    Description: Must match Task06 DBPassword
-
-Mappings:
-  AmiByRegion:
-    eu-north-1:
-      AmiId: ami-0c1ac8728ef7f4054
-    eu-west-1:
-      AmiId: ami-0d64bb532e0502c46
-    us-east-1:
-      AmiId: ami-0c7217cdde317cfec
+    Description: Must match task06 DBPassword
+  LatestAmiId:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/canonical/ubuntu/server/22.04/stable/current/amd64/hvm/ebs-gp2/ami-id
+    Description: Latest Ubuntu 22.04 LTS AMI (resolved automatically per region)
 
 Resources:
   MoodleInstance:
@@ -33,9 +37,9 @@ Resources:
     Properties:
       InstanceType: !Ref InstanceType
       KeyName: !Ref KeyPairName
-      ImageId: !FindInMap [AmiByRegion, !Ref "AWS::Region", AmiId]
+      ImageId: !Ref LatestAmiId
       SubnetId:
-        Fn::ImportValue: !Sub "${ProjectName}-${Environment}-PrivateSubnet1Id"
+        Fn::ImportValue: !Sub "${ProjectName}-${Environment}-PublicSubnet1Id"
       SecurityGroupIds:
         - Fn::ImportValue: !Sub "${ProjectName}-${Environment}-WebSgId"
       IamInstanceProfile:
@@ -47,63 +51,72 @@ Resources:
             VolumeType: gp3
             Encrypted: true
       UserData:
-        Fn::Base64:
-          !Sub
-            - |
-              #!/bin/bash
-              set -e
-              export DEBIAN_FRONTEND=noninteractive
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          set -e
+          export DEBIAN_FRONTEND=noninteractive
 
-              # System update
-              apt-get update -y
-              apt-get upgrade -y
+          apt-get update -y
+          apt-get upgrade -y
 
-              # Install LAMP stack
-              apt-get install -y apache2 php8.1 php8.1-mysql php8.1-xml php8.1-mbstring \
-                php8.1-curl php8.1-zip php8.1-gd php8.1-intl php8.1-soap \
-                libapache2-mod-php8.1 mysql-client unzip curl wget
+          apt-get install -y apache2 php8.1 php8.1-mysql php8.1-xml php8.1-mbstring \
+            php8.1-curl php8.1-zip php8.1-gd php8.1-intl php8.1-soap \
+            libapache2-mod-php8.1 mysql-client unzip wget
 
-              # Enable Apache modules
-              a2enmod rewrite
-              systemctl enable apache2
-              systemctl start apache2
+          a2enmod rewrite
+          systemctl enable apache2
+          systemctl start apache2
 
-              # Configure PHP for Moodle
-              sed -i 's/^upload_max_filesize.*/upload_max_filesize = 128M/' /etc/php/8.1/apache2/php.ini
-              sed -i 's/^post_max_size.*/post_max_size = 128M/' /etc/php/8.1/apache2/php.ini
-              sed -i 's/^max_execution_time.*/max_execution_time = 300/' /etc/php/8.1/apache2/php.ini
+          sed -i 's/^upload_max_filesize.*/upload_max_filesize = 128M/' /etc/php/8.1/apache2/php.ini
+          sed -i 's/^post_max_size.*/post_max_size = 128M/' /etc/php/8.1/apache2/php.ini
+          sed -i 's/^max_execution_time.*/max_execution_time = 300/' /etc/php/8.1/apache2/php.ini
 
-              # Download Moodle 4.x
-              cd /var/www/html
-              wget -q https://download.moodle.org/stable404/moodle-latest-404.tgz
-              tar -xzf moodle-latest-404.tgz
-              rm -f moodle-latest-404.tgz
+          cd /var/www/html
+          wget -q https://download.moodle.org/stable405/moodle-latest-405.tgz
+          tar -xzf moodle-latest-405.tgz
+          rm -f moodle-latest-405.tgz
 
-              # Moodle data directory
-              mkdir -p /var/moodledata
-              chown -R www-data:www-data /var/www/html/moodle /var/moodledata
-              chmod -R 755 /var/www/html/moodle
-              chmod -R 770 /var/moodledata
+          mkdir -p /var/moodledata
+          chown -R www-data:www-data /var/www/html/moodle /var/moodledata
+          chmod -R 755 /var/www/html/moodle
+          chmod -R 770 /var/moodledata
 
-              # Apache virtual host
-              cat > /etc/apache2/sites-available/moodle.conf << 'EOF'
-              <VirtualHost *:80>
-                DocumentRoot /var/www/html/moodle
-                <Directory /var/www/html/moodle>
-                  AllowOverride All
-                  Require all granted
-                </Directory>
-              </VirtualHost>
-              EOF
-              a2dissite 000-default
-              a2ensite moodle
-              systemctl restart apache2
+          cat > /etc/apache2/sites-available/moodle.conf << 'APACHEEOF'
+          <VirtualHost *:80>
+            DocumentRoot /var/www/html/moodle
+            <Directory /var/www/html/moodle>
+              AllowOverride All
+              Require all granted
+            </Directory>
+          </VirtualHost>
+          APACHEEOF
 
-              # Install CloudWatch agent
-              wget -q https://s3.amazonaws.com/amazoncloudwatch-agent/ubuntu/amd64/latest/amazon-cloudwatch-agent.deb
-              dpkg -i amazon-cloudwatch-agent.deb
-              systemctl enable amazon-cloudwatch-agent
-            - {}
+          a2dissite 000-default
+          a2ensite moodle
+          systemctl restart apache2
+
+          php /var/www/html/moodle/admin/cli/install.php \
+            --wwwroot="http://$(curl -s http://169.254.169.254/latest/meta-data/public-ipv4)/moodle" \
+            --dataroot=/var/moodledata \
+            --dbtype=mysqli \
+            --dbhost=${DBEndpoint} \
+            --dbname=${DBName} \
+            --dbuser=${DBUsername} \
+            --dbpass=${DBPassword} \
+            --fullname="Moodle LMS" \
+            --shortname="moodle" \
+            --adminuser=admin \
+            --adminpass=Admin1234! \
+            --adminemail=admin@example.com \
+            --non-interactive \
+            --agree-license
+
+          chown -R www-data:www-data /var/www/html/moodle
+
+          wget -q https://s3.amazonaws.com/amazoncloudwatch-agent/ubuntu/amd64/latest/amazon-cloudwatch-agent.deb
+          dpkg -i amazon-cloudwatch-agent.deb || true
+          systemctl enable amazon-cloudwatch-agent || true
+
       Tags:
         - Key: Name
           Value: !Sub "${ProjectName}-${Environment}-moodle-web"
@@ -120,7 +133,10 @@ Outputs:
     Export:
       Name: !Sub "${ProjectName}-${Environment}-MoodleInstanceId"
 
-  MoodlePrivateIp:
-    Value: !GetAtt MoodleInstance.PrivateIp
+  MoodlePublicIp:
+    Value: !GetAtt MoodleInstance.PublicIp
     Export:
-      Name: !Sub "${ProjectName}-${Environment}-MoodlePrivateIp"
+      Name: !Sub "${ProjectName}-${Environment}-MoodlePublicIp"
+
+  MoodleUrl:
+    Value: !Sub "http://${MoodleInstance.PublicIp}/moodle"

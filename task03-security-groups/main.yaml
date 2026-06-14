@@ -37,14 +37,14 @@ Resources:
   WebSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: Web server — allow HTTP from ALB and SSH from bastion
+      GroupDescription: Web server — allow HTTP from internet and SSH from bastion
       VpcId:
         Fn::ImportValue: !Sub "${ProjectName}-${Environment}-VpcId"
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: 80
           ToPort: 80
-          SourceSecurityGroupId: !Ref AlbSecurityGroup
+          CidrIp: 0.0.0.0/0
         - IpProtocol: tcp
           FromPort: 22
           ToPort: 22

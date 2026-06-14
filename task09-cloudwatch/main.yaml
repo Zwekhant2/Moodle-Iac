@@ -71,26 +71,6 @@ Resources:
         - !Ref AlertTopic
       TreatMissingData: notBreaching
 
-  AlbRequestAlarm:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      AlarmName: !Sub "${ProjectName}-${Environment}-alb-5xx-high"
-      AlarmDescription: ALB 5xx error count above 10 in 5 minutes
-      Namespace: AWS/ApplicationELB
-      MetricName: HTTPCode_ELB_5XX_Count
-      Dimensions:
-        - Name: LoadBalancer
-          Value:
-            Fn::ImportValue: !Sub "${ProjectName}-${Environment}-AlbArn"
-      Statistic: Sum
-      Period: 300
-      EvaluationPeriods: 1
-      Threshold: 10
-      ComparisonOperator: GreaterThanThreshold
-      AlarmActions:
-        - !Ref AlertTopic
-      TreatMissingData: notBreaching
-
   MoodleDashboard:
     Type: AWS::CloudWatch::Dashboard
     Properties:
@@ -112,6 +92,19 @@ Resources:
               {
                 "type": "metric",
                 "properties": {
+                  "title": "Web Server Network In/Out",
+                  "metrics": [
+                    ["AWS/EC2","NetworkIn","InstanceId","${WebInstanceId}"],
+                    ["AWS/EC2","NetworkOut","InstanceId","${WebInstanceId}"]
+                  ],
+                  "period": 300,
+                  "stat": "Average",
+                  "view": "timeSeries"
+                }
+              },
+              {
+                "type": "metric",
+                "properties": {
                   "title": "RDS Free Storage (bytes)",
                   "metrics": [["AWS/RDS","FreeStorageSpace","DBInstanceIdentifier","${ProjectName}-${Environment}-db"]],
                   "period": 300,
@@ -122,20 +115,10 @@ Resources:
               {
                 "type": "metric",
                 "properties": {
-                  "title": "ALB Request Count",
-                  "metrics": [["AWS/ApplicationELB","RequestCount","LoadBalancer","${AlbArn}"]],
-                  "period": 60,
-                  "stat": "Sum",
-                  "view": "timeSeries"
-                }
-              },
-              {
-                "type": "metric",
-                "properties": {
-                  "title": "ALB 5XX Errors",
-                  "metrics": [["AWS/ApplicationELB","HTTPCode_ELB_5XX_Count","LoadBalancer","${AlbArn}"]],
+                  "title": "RDS CPU",
+                  "metrics": [["AWS/RDS","CPUUtilization","DBInstanceIdentifier","${ProjectName}-${Environment}-db"]],
                   "period": 300,
-                  "stat": "Sum",
+                  "stat": "Average",
                   "view": "timeSeries"
                 }
               }
@@ -143,8 +126,6 @@ Resources:
           }
         - WebInstanceId:
             Fn::ImportValue: !Sub "${ProjectName}-${Environment}-MoodleInstanceId"
-          AlbArn:
-            Fn::ImportValue: !Sub "${ProjectName}-${Environment}-AlbArn"
 
 Outputs:
   AlertTopicArn:

@@ -14,15 +14,10 @@ Parameters:
     Type: String
     Default: t3.micro
     Description: Instance type for the bastion host
-
-Mappings:
-  AmiByRegion:
-    eu-north-1:
-      AmiId: ami-0c1ac8728ef7f4054
-    eu-west-1:
-      AmiId: ami-0d64bb532e0502c46
-    us-east-1:
-      AmiId: ami-0c7217cdde317cfec
+  LatestAmiId:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/canonical/ubuntu/server/22.04/stable/current/amd64/hvm/ebs-gp2/ami-id
+    Description: Latest Ubuntu 22.04 LTS AMI (resolved automatically per region)
 
 Resources:
   BastionInstance:
@@ -30,7 +25,7 @@ Resources:
     Properties:
       InstanceType: !Ref BastionInstanceType
       KeyName: !Ref KeyPairName
-      ImageId: !FindInMap [AmiByRegion, !Ref "AWS::Region", AmiId]
+      ImageId: !Ref LatestAmiId
       SubnetId:
         Fn::ImportValue: !Sub "${ProjectName}-${Environment}-PublicSubnet1Id"
       SecurityGroupIds:
