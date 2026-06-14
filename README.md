@@ -8,6 +8,20 @@ A production-grade Moodle LMS deployment on AWS, built entirely with CloudFormat
 
 ---
 
+## Live Deployment
+
+> Deployed and verified on AWS eu-north-1 (Stockholm) — June 2026
+
+| Moodle Homepage | Moodle Login |
+|---|---|
+| ![Moodle homepage](screenshots/moodle-home.png) | ![Moodle login](screenshots/moodle-login.png) |
+
+**CloudFormation — all 5 stacks CREATE_COMPLETE:**
+
+![CloudFormation stacks](screenshots/cloudformation-stacks.png)
+
+---
+
 ## Architecture
 
 ```
