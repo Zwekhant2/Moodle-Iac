@@ -16,7 +16,7 @@ Resources:
   AlbSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: ALB — allow HTTP and HTTPS from the internet
+      GroupDescription: ALB - allow HTTP and HTTPS from the internet
       VpcId:
         Fn::ImportValue: !Sub "${ProjectName}-${Environment}-VpcId"
       SecurityGroupIngress:
@@ -37,7 +37,7 @@ Resources:
   WebSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: Web server — allow HTTP from internet and SSH from bastion
+      GroupDescription: Web server - allow HTTP from internet and SSH from bastion
       VpcId:
         Fn::ImportValue: !Sub "${ProjectName}-${Environment}-VpcId"
       SecurityGroupIngress:
@@ -58,7 +58,7 @@ Resources:
   RdsSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: RDS — allow MySQL only from web server
+      GroupDescription: RDS - allow MySQL only from web server
       VpcId:
         Fn::ImportValue: !Sub "${ProjectName}-${Environment}-VpcId"
       SecurityGroupIngress:
@@ -75,7 +75,7 @@ Resources:
   BastionSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: Bastion — allow SSH from allowed CIDR
+      GroupDescription: Bastion - allow SSH from allowed CIDR
       VpcId:
         Fn::ImportValue: !Sub "${ProjectName}-${Environment}-VpcId"
       SecurityGroupIngress:
