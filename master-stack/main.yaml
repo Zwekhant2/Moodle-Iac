@@ -1,0 +1,176 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Master Stack – Moodle on AWS (orchestrates all nested stacks in order)
+
+Parameters:
+  ProjectName: { Type: String, Default: moodle }
+  Environment: { Type: String, Default: dev, AllowedValues: [dev, test, prod] }
+  Student: { Type: String, Default: ZweLwin }
+  Course: { Type: String, Default: Practical-IaC-Deployment }
+  TemplatesBucketName:
+    Type: String
+    Description: S3 bucket name where all nested stack templates are uploaded
+  KeyPairName:
+    Type: AWS::EC2::KeyPair::KeyName
+    Description: EC2 key pair for bastion and web server
+  DBPassword:
+    Type: String
+    NoEcho: true
+    MinLength: 8
+    Description: RDS master password
+  AlertEmail:
+    Type: String
+    Default: zwekhantlwin5@gmail.com
+  AllowedSshCidr:
+    Type: String
+    Default: 0.0.0.0/0
+  VpcCidr: { Type: String, Default: 10.25.92.0/22 }
+  PublicSubnet1Cidr: { Type: String, Default: 10.25.92.0/24 }
+  PublicSubnet2Cidr: { Type: String, Default: 10.25.93.0/24 }
+  PrivateSubnet1Cidr: { Type: String, Default: 10.25.94.0/24 }
+  PrivateSubnet2Cidr: { Type: String, Default: 10.25.95.0/24 }
+
+Resources:
+  NetworkingStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: !Sub "https://${TemplatesBucketName}.s3.amazonaws.com/task01-networking/main.yaml"
+      Parameters:
+        ProjectName: !Ref ProjectName
+        Environment: !Ref Environment
+        Student: !Ref Student
+        Course: !Ref Course
+        VpcCidr: !Ref VpcCidr
+        PublicSubnet1Cidr: !Ref PublicSubnet1Cidr
+        PublicSubnet2Cidr: !Ref PublicSubnet2Cidr
+        PrivateSubnet1Cidr: !Ref PrivateSubnet1Cidr
+        PrivateSubnet2Cidr: !Ref PrivateSubnet2Cidr
+
+  NatGatewayStack:
+    Type: AWS::CloudFormation::Stack
+    DependsOn: NetworkingStack
+    Properties:
+      TemplateURL: !Sub "https://${TemplatesBucketName}.s3.amazonaws.com/task02-nat-gateway/main.yaml"
+      Parameters:
+        ProjectName: !Ref ProjectName
+        Environment: !Ref Environment
+        Student: !Ref Student
+        Course: !Ref Course
+
+  SecurityGroupsStack:
+    Type: AWS::CloudFormation::Stack
+    DependsOn: NetworkingStack
+    Properties:
+      TemplateURL: !Sub "https://${TemplatesBucketName}.s3.amazonaws.com/task03-security-groups/main.yaml"
+      Parameters:
+        ProjectName: !Ref ProjectName
+        Environment: !Ref Environment
+        Student: !Ref Student
+        Course: !Ref Course
+        AllowedSshCidr: !Ref AllowedSshCidr
+
+  IamStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: !Sub "https://${TemplatesBucketName}.s3.amazonaws.com/task04-iam/main.yaml"
+      Parameters:
+        ProjectName: !Ref ProjectName
+        Environment: !Ref Environment
+        Student: !Ref Student
+        Course: !Ref Course
+      Capabilities:
+        - CAPABILITY_NAMED_IAM
+
+  BastionStack:
+    Type: AWS::CloudFormation::Stack
+    DependsOn:
+      - SecurityGroupsStack
+      - IamStack
+    Properties:
+      TemplateURL: !Sub "https://${TemplatesBucketName}.s3.amazonaws.com/task05-bastion/main.yaml"
+      Parameters:
+        ProjectName: !Ref ProjectName
+        Environment: !Ref Environment
+        Student: !Ref Student
+        Course: !Ref Course
+        KeyPairName: !Ref KeyPairName
+
+  RdsStack:
+    Type: AWS::CloudFormation::Stack
+    DependsOn:
+      - NetworkingStack
+      - SecurityGroupsStack
+    Properties:
+      TemplateURL: !Sub "https://${TemplatesBucketName}.s3.amazonaws.com/task06-rds/main.yaml"
+      Parameters:
+        ProjectName: !Ref ProjectName
+        Environment: !Ref Environment
+        Student: !Ref Student
+        Course: !Ref Course
+        DBPassword: !Ref DBPassword
+
+  Ec2MoodleStack:
+    Type: AWS::CloudFormation::Stack
+    DependsOn:
+      - NatGatewayStack
+      - SecurityGroupsStack
+      - IamStack
+      - RdsStack
+    Properties:
+      TemplateURL: !Sub "https://${TemplatesBucketName}.s3.amazonaws.com/task07-ec2-moodle/main.yaml"
+      Parameters:
+        ProjectName: !Ref ProjectName
+        Environment: !Ref Environment
+        Student: !Ref Student
+        Course: !Ref Course
+        KeyPairName: !Ref KeyPairName
+        DBPassword: !Ref DBPassword
+
+  AlbStack:
+    Type: AWS::CloudFormation::Stack
+    DependsOn: Ec2MoodleStack
+    Properties:
+      TemplateURL: !Sub "https://${TemplatesBucketName}.s3.amazonaws.com/task08-alb/main.yaml"
+      Parameters:
+        ProjectName: !Ref ProjectName
+        Environment: !Ref Environment
+        Student: !Ref Student
+        Course: !Ref Course
+
+  CloudWatchStack:
+    Type: AWS::CloudFormation::Stack
+    DependsOn: AlbStack
+    Properties:
+      TemplateURL: !Sub "https://${TemplatesBucketName}.s3.amazonaws.com/task09-cloudwatch/main.yaml"
+      Parameters:
+        ProjectName: !Ref ProjectName
+        Environment: !Ref Environment
+        Student: !Ref Student
+        Course: !Ref Course
+        AlertEmail: !Ref AlertEmail
+
+  S3Stack:
+    Type: AWS::CloudFormation::Stack
+    DependsOn: IamStack
+    Properties:
+      TemplateURL: !Sub "https://${TemplatesBucketName}.s3.amazonaws.com/task10-s3/main.yaml"
+      Parameters:
+        ProjectName: !Ref ProjectName
+        Environment: !Ref Environment
+        Student: !Ref Student
+        Course: !Ref Course
+
+Outputs:
+  MoodleUrl:
+    Description: Moodle LMS URL via ALB
+    Value: !Sub
+      - "http://${AlbDns}/moodle"
+      - AlbDns: !GetAtt AlbStack.Outputs.AlbDnsName
+
+  BastionPublicIp:
+    Value: !GetAtt BastionStack.Outputs.BastionPublicIp
+
+  RdsEndpoint:
+    Value: !GetAtt RdsStack.Outputs.DBEndpoint
+
+  DashboardUrl:
+    Value: !GetAtt CloudWatchStack.Outputs.DashboardUrl

@@ -1,0 +1,10 @@
+{
+  "ProjectName": "moodle",
+  "Environment": "dev",
+  "Student": "ZweLwin",
+  "Course": "Practical-IaC-Deployment",
+  "Task": "Task07-EC2-Moodle",
+  "KeyPairName": "your-key-pair-name",
+  "InstanceType": "t3.medium",
+  "DBPassword": "CHANGE_ME_BEFORE_DEPLOY"
+}

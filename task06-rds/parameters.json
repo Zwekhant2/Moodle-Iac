@@ -1,0 +1,12 @@
+{
+  "ProjectName": "moodle",
+  "Environment": "dev",
+  "Student": "ZweLwin",
+  "Course": "Practical-IaC-Deployment",
+  "Task": "Task06-RDS",
+  "DBInstanceClass": "db.t3.micro",
+  "DBName": "moodle",
+  "DBUsername": "moodleadmin",
+  "DBPassword": "CHANGE_ME_BEFORE_DEPLOY",
+  "MultiAZ": "false"
+}

@@ -1,0 +1,81 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Task 8 – Application Load Balancer (ALB + target group + HTTP listener)
+
+Parameters:
+  ProjectName: { Type: String, Default: moodle }
+  Environment: { Type: String, Default: dev, AllowedValues: [dev, test, prod] }
+  Student: { Type: String, Default: ZweLwin }
+  Course: { Type: String, Default: Practical-IaC-Deployment }
+  Task: { Type: String, Default: Task08-ALB }
+
+Resources:
+  LoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: !Sub "${ProjectName}-${Environment}-alb"
+      Scheme: internet-facing
+      Type: application
+      IpAddressType: ipv4
+      Subnets:
+        - Fn::ImportValue: !Sub "${ProjectName}-${Environment}-PublicSubnet1Id"
+        - Fn::ImportValue: !Sub "${ProjectName}-${Environment}-PublicSubnet2Id"
+      SecurityGroups:
+        - Fn::ImportValue: !Sub "${ProjectName}-${Environment}-AlbSgId"
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectName}-${Environment}-alb"
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref Environment
+
+  TargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: !Sub "${ProjectName}-${Environment}-tg"
+      Protocol: HTTP
+      Port: 80
+      VpcId:
+        Fn::ImportValue: !Sub "${ProjectName}-${Environment}-VpcId"
+      TargetType: instance
+      HealthCheckPath: /moodle/
+      HealthCheckProtocol: HTTP
+      HealthCheckIntervalSeconds: 30
+      HealthCheckTimeoutSeconds: 5
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 3
+      Targets:
+        - Id:
+            Fn::ImportValue: !Sub "${ProjectName}-${Environment}-MoodleInstanceId"
+          Port: 80
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectName}-${Environment}-tg"
+        - Key: Project
+          Value: !Ref ProjectName
+
+  HttpListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref LoadBalancer
+      Protocol: HTTP
+      Port: 80
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref TargetGroup
+
+Outputs:
+  AlbArn:
+    Value: !Ref LoadBalancer
+    Export:
+      Name: !Sub "${ProjectName}-${Environment}-AlbArn"
+
+  AlbDnsName:
+    Value: !GetAtt LoadBalancer.DNSName
+    Export:
+      Name: !Sub "${ProjectName}-${Environment}-AlbDnsName"
+
+  TargetGroupArn:
+    Value: !Ref TargetGroup
+    Export:
+      Name: !Sub "${ProjectName}-${Environment}-TargetGroupArn"

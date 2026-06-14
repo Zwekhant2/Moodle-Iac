@@ -1,0 +1,9 @@
+{
+  "ProjectName": "moodle",
+  "Environment": "dev",
+  "Student": "ZweLwin",
+  "Course": "Practical-IaC-Deployment",
+  "Task": "Task09-CloudWatch",
+  "AlertEmail": "zwekhantlwin5@gmail.com",
+  "CpuAlarmThreshold": "80"
+}

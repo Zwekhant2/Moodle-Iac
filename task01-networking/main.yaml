@@ -108,8 +108,32 @@ Resources:
       SubnetId: !Ref PrivateSubnet2
 
 Outputs:
-  VpcId: { Value: !Ref VPC }
-  PublicSubnet1Id: { Value: !Ref PublicSubnet1 }
-  PublicSubnet2Id: { Value: !Ref PublicSubnet2 }
-  PrivateSubnet1Id: { Value: !Ref PrivateSubnet1 }
-  PrivateSubnet2Id: { Value: !Ref PrivateSubnet2 }
+  VpcId:
+    Value: !Ref VPC
+    Export:
+      Name: !Sub "${ProjectName}-${Environment}-VpcId"
+
+  PublicSubnet1Id:
+    Value: !Ref PublicSubnet1
+    Export:
+      Name: !Sub "${ProjectName}-${Environment}-PublicSubnet1Id"
+
+  PublicSubnet2Id:
+    Value: !Ref PublicSubnet2
+    Export:
+      Name: !Sub "${ProjectName}-${Environment}-PublicSubnet2Id"
+
+  PrivateSubnet1Id:
+    Value: !Ref PrivateSubnet1
+    Export:
+      Name: !Sub "${ProjectName}-${Environment}-PrivateSubnet1Id"
+
+  PrivateSubnet2Id:
+    Value: !Ref PrivateSubnet2
+    Export:
+      Name: !Sub "${ProjectName}-${Environment}-PrivateSubnet2Id"
+
+  PrivateRouteTableId:
+    Value: !Ref PrivateRouteTable
+    Export:
+      Name: !Sub "${ProjectName}-${Environment}-PrivateRouteTableId"

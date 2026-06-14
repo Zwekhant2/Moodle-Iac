@@ -1,0 +1,8 @@
+{
+  "ProjectName": "moodle",
+  "Environment": "dev",
+  "Student": "ZweLwin",
+  "Course": "Practical-IaC-Deployment",
+  "Task": "Task03-SecurityGroups",
+  "AllowedSshCidr": "0.0.0.0/0"
+}

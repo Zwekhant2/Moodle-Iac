@@ -1,0 +1,64 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Task 5 – Bastion Host (EC2 in public subnet for SSH access)
+
+Parameters:
+  ProjectName: { Type: String, Default: moodle }
+  Environment: { Type: String, Default: dev, AllowedValues: [dev, test, prod] }
+  Student: { Type: String, Default: ZweLwin }
+  Course: { Type: String, Default: Practical-IaC-Deployment }
+  Task: { Type: String, Default: Task05-Bastion }
+  KeyPairName:
+    Type: AWS::EC2::KeyPair::KeyName
+    Description: EC2 key pair for SSH access to the bastion host
+  BastionInstanceType:
+    Type: String
+    Default: t3.micro
+    Description: Instance type for the bastion host
+
+Mappings:
+  AmiByRegion:
+    eu-north-1:
+      AmiId: ami-0c1ac8728ef7f4054
+    eu-west-1:
+      AmiId: ami-0d64bb532e0502c46
+    us-east-1:
+      AmiId: ami-0c7217cdde317cfec
+
+Resources:
+  BastionInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: !Ref BastionInstanceType
+      KeyName: !Ref KeyPairName
+      ImageId: !FindInMap [AmiByRegion, !Ref "AWS::Region", AmiId]
+      SubnetId:
+        Fn::ImportValue: !Sub "${ProjectName}-${Environment}-PublicSubnet1Id"
+      SecurityGroupIds:
+        - Fn::ImportValue: !Sub "${ProjectName}-${Environment}-BastionSgId"
+      IamInstanceProfile:
+        Fn::ImportValue: !Sub "${ProjectName}-${Environment}-Ec2InstanceProfileName"
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          apt-get update -y
+          apt-get install -y awscli
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectName}-${Environment}-bastion"
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Role
+          Value: bastion
+
+Outputs:
+  BastionInstanceId:
+    Value: !Ref BastionInstance
+    Export:
+      Name: !Sub "${ProjectName}-${Environment}-BastionInstanceId"
+
+  BastionPublicIp:
+    Value: !GetAtt BastionInstance.PublicIp
+    Export:
+      Name: !Sub "${ProjectName}-${Environment}-BastionPublicIp"

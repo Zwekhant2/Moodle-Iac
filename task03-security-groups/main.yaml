@@ -1,0 +1,111 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Task 3 – Security Groups (ALB, Web, RDS, Bastion)
+
+Parameters:
+  ProjectName: { Type: String, Default: moodle }
+  Environment: { Type: String, Default: dev, AllowedValues: [dev, test, prod] }
+  Student: { Type: String, Default: ZweLwin }
+  Course: { Type: String, Default: Practical-IaC-Deployment }
+  Task: { Type: String, Default: Task03-SecurityGroups }
+  AllowedSshCidr:
+    Type: String
+    Default: 0.0.0.0/0
+    Description: CIDR allowed to SSH to the bastion host (restrict in production)
+
+Resources:
+  AlbSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: ALB — allow HTTP and HTTPS from the internet
+      VpcId:
+        Fn::ImportValue: !Sub "${ProjectName}-${Environment}-VpcId"
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectName}-${Environment}-alb-sg"
+        - Key: Project
+          Value: !Ref ProjectName
+
+  WebSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Web server — allow HTTP from ALB and SSH from bastion
+      VpcId:
+        Fn::ImportValue: !Sub "${ProjectName}-${Environment}-VpcId"
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          SourceSecurityGroupId: !Ref AlbSecurityGroup
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          SourceSecurityGroupId: !Ref BastionSecurityGroup
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectName}-${Environment}-web-sg"
+        - Key: Project
+          Value: !Ref ProjectName
+
+  RdsSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: RDS — allow MySQL only from web server
+      VpcId:
+        Fn::ImportValue: !Sub "${ProjectName}-${Environment}-VpcId"
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+          SourceSecurityGroupId: !Ref WebSecurityGroup
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectName}-${Environment}-rds-sg"
+        - Key: Project
+          Value: !Ref ProjectName
+
+  BastionSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Bastion — allow SSH from allowed CIDR
+      VpcId:
+        Fn::ImportValue: !Sub "${ProjectName}-${Environment}-VpcId"
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: !Ref AllowedSshCidr
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectName}-${Environment}-bastion-sg"
+        - Key: Project
+          Value: !Ref ProjectName
+
+Outputs:
+  AlbSgId:
+    Value: !Ref AlbSecurityGroup
+    Export:
+      Name: !Sub "${ProjectName}-${Environment}-AlbSgId"
+
+  WebSgId:
+    Value: !Ref WebSecurityGroup
+    Export:
+      Name: !Sub "${ProjectName}-${Environment}-WebSgId"
+
+  RdsSgId:
+    Value: !Ref RdsSecurityGroup
+    Export:
+      Name: !Sub "${ProjectName}-${Environment}-RdsSgId"
+
+  BastionSgId:
+    Value: !Ref BastionSecurityGroup
+    Export:
+      Name: !Sub "${ProjectName}-${Environment}-BastionSgId"

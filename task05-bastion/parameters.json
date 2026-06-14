@@ -1,0 +1,9 @@
+{
+  "ProjectName": "moodle",
+  "Environment": "dev",
+  "Student": "ZweLwin",
+  "Course": "Practical-IaC-Deployment",
+  "Task": "Task05-Bastion",
+  "KeyPairName": "your-key-pair-name",
+  "BastionInstanceType": "t3.micro"
+}

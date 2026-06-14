@@ -1,0 +1,126 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Task 7 – EC2 Instance with Moodle 4.x installed via UserData (LAMP on Ubuntu 22.04)
+
+Parameters:
+  ProjectName: { Type: String, Default: moodle }
+  Environment: { Type: String, Default: dev, AllowedValues: [dev, test, prod] }
+  Student: { Type: String, Default: ZweLwin }
+  Course: { Type: String, Default: Practical-IaC-Deployment }
+  Task: { Type: String, Default: Task07-EC2-Moodle }
+  KeyPairName:
+    Type: AWS::EC2::KeyPair::KeyName
+    Description: EC2 key pair for SSH (via bastion)
+  InstanceType:
+    Type: String
+    Default: t3.medium
+  DBPassword:
+    Type: String
+    NoEcho: true
+    Description: Must match Task06 DBPassword
+
+Mappings:
+  AmiByRegion:
+    eu-north-1:
+      AmiId: ami-0c1ac8728ef7f4054
+    eu-west-1:
+      AmiId: ami-0d64bb532e0502c46
+    us-east-1:
+      AmiId: ami-0c7217cdde317cfec
+
+Resources:
+  MoodleInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: !Ref InstanceType
+      KeyName: !Ref KeyPairName
+      ImageId: !FindInMap [AmiByRegion, !Ref "AWS::Region", AmiId]
+      SubnetId:
+        Fn::ImportValue: !Sub "${ProjectName}-${Environment}-PrivateSubnet1Id"
+      SecurityGroupIds:
+        - Fn::ImportValue: !Sub "${ProjectName}-${Environment}-WebSgId"
+      IamInstanceProfile:
+        Fn::ImportValue: !Sub "${ProjectName}-${Environment}-Ec2InstanceProfileName"
+      BlockDeviceMappings:
+        - DeviceName: /dev/sda1
+          Ebs:
+            VolumeSize: 20
+            VolumeType: gp3
+            Encrypted: true
+      UserData:
+        Fn::Base64:
+          !Sub
+            - |
+              #!/bin/bash
+              set -e
+              export DEBIAN_FRONTEND=noninteractive
+
+              # System update
+              apt-get update -y
+              apt-get upgrade -y
+
+              # Install LAMP stack
+              apt-get install -y apache2 php8.1 php8.1-mysql php8.1-xml php8.1-mbstring \
+                php8.1-curl php8.1-zip php8.1-gd php8.1-intl php8.1-soap \
+                libapache2-mod-php8.1 mysql-client unzip curl wget
+
+              # Enable Apache modules
+              a2enmod rewrite
+              systemctl enable apache2
+              systemctl start apache2
+
+              # Configure PHP for Moodle
+              sed -i 's/^upload_max_filesize.*/upload_max_filesize = 128M/' /etc/php/8.1/apache2/php.ini
+              sed -i 's/^post_max_size.*/post_max_size = 128M/' /etc/php/8.1/apache2/php.ini
+              sed -i 's/^max_execution_time.*/max_execution_time = 300/' /etc/php/8.1/apache2/php.ini
+
+              # Download Moodle 4.x
+              cd /var/www/html
+              wget -q https://download.moodle.org/stable404/moodle-latest-404.tgz
+              tar -xzf moodle-latest-404.tgz
+              rm -f moodle-latest-404.tgz
+
+              # Moodle data directory
+              mkdir -p /var/moodledata
+              chown -R www-data:www-data /var/www/html/moodle /var/moodledata
+              chmod -R 755 /var/www/html/moodle
+              chmod -R 770 /var/moodledata
+
+              # Apache virtual host
+              cat > /etc/apache2/sites-available/moodle.conf << 'EOF'
+              <VirtualHost *:80>
+                DocumentRoot /var/www/html/moodle
+                <Directory /var/www/html/moodle>
+                  AllowOverride All
+                  Require all granted
+                </Directory>
+              </VirtualHost>
+              EOF
+              a2dissite 000-default
+              a2ensite moodle
+              systemctl restart apache2
+
+              # Install CloudWatch agent
+              wget -q https://s3.amazonaws.com/amazoncloudwatch-agent/ubuntu/amd64/latest/amazon-cloudwatch-agent.deb
+              dpkg -i amazon-cloudwatch-agent.deb
+              systemctl enable amazon-cloudwatch-agent
+            - {}
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectName}-${Environment}-moodle-web"
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Role
+          Value: web
+
+Outputs:
+  MoodleInstanceId:
+    Value: !Ref MoodleInstance
+    Export:
+      Name: !Sub "${ProjectName}-${Environment}-MoodleInstanceId"
+
+  MoodlePrivateIp:
+    Value: !GetAtt MoodleInstance.PrivateIp
+    Export:
+      Name: !Sub "${ProjectName}-${Environment}-MoodlePrivateIp"

@@ -1,0 +1,156 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Task 9 – CloudWatch Monitoring (dashboard + CPU alarms + SNS topic)
+
+Parameters:
+  ProjectName: { Type: String, Default: moodle }
+  Environment: { Type: String, Default: dev, AllowedValues: [dev, test, prod] }
+  Student: { Type: String, Default: ZweLwin }
+  Course: { Type: String, Default: Practical-IaC-Deployment }
+  Task: { Type: String, Default: Task09-CloudWatch }
+  AlertEmail:
+    Type: String
+    Default: admin@example.com
+    Description: Email address to receive CloudWatch alarm notifications
+  CpuAlarmThreshold:
+    Type: Number
+    Default: 80
+    Description: CPU utilisation % that triggers the high-CPU alarm
+
+Resources:
+  AlertTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub "${ProjectName}-${Environment}-alerts"
+      Subscription:
+        - Protocol: email
+          Endpoint: !Ref AlertEmail
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref Environment
+
+  WebCpuHighAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${ProjectName}-${Environment}-web-cpu-high"
+      AlarmDescription: Web server CPU above threshold
+      Namespace: AWS/EC2
+      MetricName: CPUUtilization
+      Dimensions:
+        - Name: InstanceId
+          Value:
+            Fn::ImportValue: !Sub "${ProjectName}-${Environment}-MoodleInstanceId"
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: !Ref CpuAlarmThreshold
+      ComparisonOperator: GreaterThanThreshold
+      AlarmActions:
+        - !Ref AlertTopic
+      OKActions:
+        - !Ref AlertTopic
+      TreatMissingData: notBreaching
+
+  RdsStorageAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${ProjectName}-${Environment}-rds-storage-low"
+      AlarmDescription: RDS free storage below 2 GB
+      Namespace: AWS/RDS
+      MetricName: FreeStorageSpace
+      Dimensions:
+        - Name: DBInstanceIdentifier
+          Value: !Sub "${ProjectName}-${Environment}-db"
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 2000000000
+      ComparisonOperator: LessThanThreshold
+      AlarmActions:
+        - !Ref AlertTopic
+      TreatMissingData: notBreaching
+
+  AlbRequestAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${ProjectName}-${Environment}-alb-5xx-high"
+      AlarmDescription: ALB 5xx error count above 10 in 5 minutes
+      Namespace: AWS/ApplicationELB
+      MetricName: HTTPCode_ELB_5XX_Count
+      Dimensions:
+        - Name: LoadBalancer
+          Value:
+            Fn::ImportValue: !Sub "${ProjectName}-${Environment}-AlbArn"
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 10
+      ComparisonOperator: GreaterThanThreshold
+      AlarmActions:
+        - !Ref AlertTopic
+      TreatMissingData: notBreaching
+
+  MoodleDashboard:
+    Type: AWS::CloudWatch::Dashboard
+    Properties:
+      DashboardName: !Sub "${ProjectName}-${Environment}-dashboard"
+      DashboardBody: !Sub
+        - |
+          {
+            "widgets": [
+              {
+                "type": "metric",
+                "properties": {
+                  "title": "Web Server CPU",
+                  "metrics": [["AWS/EC2","CPUUtilization","InstanceId","${WebInstanceId}"]],
+                  "period": 300,
+                  "stat": "Average",
+                  "view": "timeSeries"
+                }
+              },
+              {
+                "type": "metric",
+                "properties": {
+                  "title": "RDS Free Storage (bytes)",
+                  "metrics": [["AWS/RDS","FreeStorageSpace","DBInstanceIdentifier","${ProjectName}-${Environment}-db"]],
+                  "period": 300,
+                  "stat": "Average",
+                  "view": "timeSeries"
+                }
+              },
+              {
+                "type": "metric",
+                "properties": {
+                  "title": "ALB Request Count",
+                  "metrics": [["AWS/ApplicationELB","RequestCount","LoadBalancer","${AlbArn}"]],
+                  "period": 60,
+                  "stat": "Sum",
+                  "view": "timeSeries"
+                }
+              },
+              {
+                "type": "metric",
+                "properties": {
+                  "title": "ALB 5XX Errors",
+                  "metrics": [["AWS/ApplicationELB","HTTPCode_ELB_5XX_Count","LoadBalancer","${AlbArn}"]],
+                  "period": 300,
+                  "stat": "Sum",
+                  "view": "timeSeries"
+                }
+              }
+            ]
+          }
+        - WebInstanceId:
+            Fn::ImportValue: !Sub "${ProjectName}-${Environment}-MoodleInstanceId"
+          AlbArn:
+            Fn::ImportValue: !Sub "${ProjectName}-${Environment}-AlbArn"
+
+Outputs:
+  AlertTopicArn:
+    Value: !Ref AlertTopic
+    Export:
+      Name: !Sub "${ProjectName}-${Environment}-AlertTopicArn"
+
+  DashboardUrl:
+    Value: !Sub "https://console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#dashboards:name=${ProjectName}-${Environment}-dashboard"

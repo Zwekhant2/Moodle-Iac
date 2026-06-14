@@ -1,0 +1,85 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Task 10 – S3 Bucket for Moodle data files and backups
+
+Parameters:
+  ProjectName: { Type: String, Default: moodle }
+  Environment: { Type: String, Default: dev, AllowedValues: [dev, test, prod] }
+  Student: { Type: String, Default: ZweLwin }
+  Course: { Type: String, Default: Practical-IaC-Deployment }
+  Task: { Type: String, Default: Task10-S3 }
+
+Resources:
+  MoodleDataBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    Properties:
+      BucketName: !Sub "${ProjectName}-${Environment}-data-${AWS::AccountId}"
+      VersioningConfiguration:
+        Status: Enabled
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      LifecycleConfiguration:
+        Rules:
+          - Id: BackupExpiry
+            Status: Enabled
+            Prefix: backups/
+            ExpirationInDays: 90
+          - Id: OldVersionCleanup
+            Status: Enabled
+            NoncurrentVersionExpirationInDays: 30
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectName}-${Environment}-data"
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref Environment
+
+  MoodleDataBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref MoodleDataBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AllowEC2Access
+            Effect: Allow
+            Principal:
+              AWS:
+                Fn::ImportValue: !Sub "${ProjectName}-${Environment}-Ec2RoleArn"
+            Action:
+              - s3:GetObject
+              - s3:PutObject
+              - s3:DeleteObject
+              - s3:ListBucket
+            Resource:
+              - !GetAtt MoodleDataBucket.Arn
+              - !Sub "${MoodleDataBucket.Arn}/*"
+          - Sid: DenyNonSSL
+            Effect: Deny
+            Principal: "*"
+            Action: s3:*
+            Resource:
+              - !GetAtt MoodleDataBucket.Arn
+              - !Sub "${MoodleDataBucket.Arn}/*"
+            Condition:
+              Bool:
+                aws:SecureTransport: false
+
+Outputs:
+  BucketName:
+    Value: !Ref MoodleDataBucket
+    Export:
+      Name: !Sub "${ProjectName}-${Environment}-BucketName"
+
+  BucketArn:
+    Value: !GetAtt MoodleDataBucket.Arn
+    Export:
+      Name: !Sub "${ProjectName}-${Environment}-BucketArn"

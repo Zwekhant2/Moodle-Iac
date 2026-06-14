@@ -1,0 +1,86 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Task 6 – RDS MySQL 8 in private subnet
+
+Parameters:
+  ProjectName: { Type: String, Default: moodle }
+  Environment: { Type: String, Default: dev, AllowedValues: [dev, test, prod] }
+  Student: { Type: String, Default: ZweLwin }
+  Course: { Type: String, Default: Practical-IaC-Deployment }
+  Task: { Type: String, Default: Task06-RDS }
+  DBInstanceClass:
+    Type: String
+    Default: db.t3.micro
+  DBName:
+    Type: String
+    Default: moodle
+  DBUsername:
+    Type: String
+    Default: moodleadmin
+    NoEcho: true
+  DBPassword:
+    Type: String
+    NoEcho: true
+    MinLength: 8
+    Description: RDS master password (min 8 characters)
+  MultiAZ:
+    Type: String
+    Default: "false"
+    AllowedValues: ["true", "false"]
+
+Resources:
+  DBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: !Sub "${ProjectName}-${Environment} RDS subnet group (private)"
+      SubnetIds:
+        - Fn::ImportValue: !Sub "${ProjectName}-${Environment}-PrivateSubnet1Id"
+        - Fn::ImportValue: !Sub "${ProjectName}-${Environment}-PrivateSubnet2Id"
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectName}-${Environment}-db-subnet-group"
+        - Key: Project
+          Value: !Ref ProjectName
+
+  DBInstance:
+    Type: AWS::RDS::DBInstance
+    DeletionPolicy: Snapshot
+    Properties:
+      DBInstanceIdentifier: !Sub "${ProjectName}-${Environment}-db"
+      DBInstanceClass: !Ref DBInstanceClass
+      Engine: mysql
+      EngineVersion: "8.0"
+      DBName: !Ref DBName
+      MasterUsername: !Ref DBUsername
+      MasterUserPassword: !Ref DBPassword
+      DBSubnetGroupName: !Ref DBSubnetGroup
+      VPCSecurityGroups:
+        - Fn::ImportValue: !Sub "${ProjectName}-${Environment}-RdsSgId"
+      MultiAZ: !Ref MultiAZ
+      StorageType: gp3
+      AllocatedStorage: "20"
+      StorageEncrypted: true
+      BackupRetentionPeriod: 7
+      DeletionProtection: false
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectName}-${Environment}-db"
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref Environment
+
+Outputs:
+  DBEndpoint:
+    Value: !GetAtt DBInstance.Endpoint.Address
+    Export:
+      Name: !Sub "${ProjectName}-${Environment}-DBEndpoint"
+
+  DBPort:
+    Value: !GetAtt DBInstance.Endpoint.Port
+    Export:
+      Name: !Sub "${ProjectName}-${Environment}-DBPort"
+
+  DBName:
+    Value: !Ref DBName
+    Export:
+      Name: !Sub "${ProjectName}-${Environment}-DBName"

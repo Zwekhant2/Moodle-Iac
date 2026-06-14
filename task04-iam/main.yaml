@@ -1,0 +1,67 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Task 4 – IAM Role and Instance Profile for EC2 (CloudWatch + SSM)
+
+Parameters:
+  ProjectName: { Type: String, Default: moodle }
+  Environment: { Type: String, Default: dev, AllowedValues: [dev, test, prod] }
+  Student: { Type: String, Default: ZweLwin }
+  Course: { Type: String, Default: Practical-IaC-Deployment }
+  Task: { Type: String, Default: Task04-IAM }
+
+Resources:
+  Ec2Role:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${ProjectName}-${Environment}-ec2-role"
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+      Policies:
+        - PolicyName: S3MoodleDataAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:DeleteObject
+                  - s3:ListBucket
+                Resource:
+                  - !Sub "arn:aws:s3:::${ProjectName}-${Environment}-data/*"
+                  - !Sub "arn:aws:s3:::${ProjectName}-${Environment}-data"
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref Environment
+
+  Ec2InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      InstanceProfileName: !Sub "${ProjectName}-${Environment}-ec2-profile"
+      Roles:
+        - !Ref Ec2Role
+
+Outputs:
+  Ec2RoleArn:
+    Value: !GetAtt Ec2Role.Arn
+    Export:
+      Name: !Sub "${ProjectName}-${Environment}-Ec2RoleArn"
+
+  Ec2InstanceProfileArn:
+    Value: !GetAtt Ec2InstanceProfile.Arn
+    Export:
+      Name: !Sub "${ProjectName}-${Environment}-Ec2InstanceProfileArn"
+
+  Ec2InstanceProfileName:
+    Value: !Ref Ec2InstanceProfile
+    Export:
+      Name: !Sub "${ProjectName}-${Environment}-Ec2InstanceProfileName"
